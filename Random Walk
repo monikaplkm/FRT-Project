@@ -1,0 +1,109 @@
+import networkx as nx
+import pandas as pd
+import random
+import csv
+
+# Read the edges from the CSV file
+edges = []
+with open("trust item 363 delimited comma.csv", "r") as file:
+    reader = csv.reader(file)
+    for row in reader:
+        try:
+            edges.append(tuple(map(int, row[0].split(','))))
+        except ValueError as v:
+            print(v)
+
+# Create a social network graph
+graph = nx.DiGraph()
+
+# Add edges
+graph.add_weighted_edges_from(edges)
+
+# Read the vote data from the CSV file
+data = pd.read_csv('votes item 363 epinions clean removes 10% - degree negative.csv')
+
+# Iterate over the rows and insert vote values in the graph
+
+social_network = {}
+# Iterate over the rows and insert vote values in the social network
+for row in data.itertuples(index=False):
+    node = row[0]  # Assuming the node information is in the first column of the CSV
+    vote = row[1]  # Assuming the vote information is in the second column of the CSV
+
+    if node in social_network:
+        social_network[node].append(vote)
+    else:
+        social_network[node] = [vote]
+
+    graph.add_node(node, vote=vote)
+
+# Retrieve the vote attributes of nodes
+node_votes = nx.get_node_attributes(graph, 'vote')
+
+# # Print the vote values of all nodes
+# for node, vote in node_votes.items():
+#     print(f"Node: {node}, Vote: {vote}")
+
+# Identify non-voters
+non_voters = [node for node, data in graph.nodes(data=True) if data['vote'] == '-']
+
+# print(non_voters)
+
+# random_walk_iterations = 5
+
+def random_step(neighbors):
+    return random.choice(neighbors)
+
+def random_walk(graph, non_voters):
+    for non_voter in non_voters:
+        current_node = non_voter
+        
+        while True:
+            neighbors = list(graph.successors(current_node))
+            if not neighbors:
+                break  # No outgoing edges, stop the random walk
+                
+            current_node = random_step(neighbors)
+            vote = graph.nodes[current_node]['vote']
+            
+            if vote != '-':
+                graph.nodes[non_voter]['vote'] = vote
+                break  # Stop the random walk if a valid vote is reached
+
+# Create an empty DataFrame to store the final results
+final_results = pd.DataFrame()
+
+# Create an empty Excel file (results.xlsx) with a sheet named "Results"
+with pd.ExcelWriter('results random walk 30x removes 10% trial degree negative.xlsx', engine='openpyxl') as writer:
+    # Create a DataFrame to store node names
+    node_names = [node for node in graph.nodes()]
+    node_names_df = pd.DataFrame({'node': node_names})
+
+    # Save the node names to the Excel sheet in cell (1, 1)
+    node_names_df.to_excel(writer, sheet_name='Results', index=False, header=False, startrow=0, startcol=0)
+
+    for i in range(1, 26):
+        # Make a copy of the original graph to start fresh each time
+        updated_graph = graph.copy()
+
+        # Run the random walk algorithm 20 times for each iteration
+        # random_walk_iterations = 5
+        # random_walk(updated_graph, non_voters, random_walk_iterations)
+        random_walk(updated_graph, non_voters)
+
+        # Create a DataFrame to store vote information for this iteration
+        data = {'vote': []}
+        for node, attributes in updated_graph.nodes(data=True):
+            vote = attributes['vote']
+            if vote != '-':  # Convert to int only if vote is not '-'
+                vote = int(vote)
+            data['vote'].append(vote)
+
+        # Convert the data to a DataFrame
+        df = pd.DataFrame(data)
+
+        # Save the DataFrame to the Excel workbook in the same sheet starting from column B
+        df.to_excel(writer, sheet_name='Results', index=False, startcol=i, header=False)
+
+# Print a message to indicate completion
+print("Results saved to Excel file")
