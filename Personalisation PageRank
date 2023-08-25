@@ -1,0 +1,87 @@
+import networkx as nx
+import pandas as pd
+import csv
+
+
+# Read the edges from the CSV file
+edges = []
+with open("trust item 363 delimited comma - between.csv", "r") as file:
+    reader = csv.reader(file)
+    for row in reader:
+        try:
+            edges.append(tuple(map(int, row[0].split(','))))
+        except ValueError as v:
+            print(v)
+
+# Create a social network graph
+graph = nx.DiGraph()
+
+# Add edges
+graph.add_weighted_edges_from(edges)
+
+# Read the vote data from the CSV file
+data = pd.read_csv('votes item 363 epinions clean removes 9% - between.csv')
+
+# Iterate over the rows and insert vote values in the graph
+
+social_network = {}
+# Iterate over the rows and insert vote values in the social network
+for row in data.itertuples(index=False):
+    node = row[0]  # Assuming the node information is in the first column of the CSV
+    vote = row[1]  # Assuming the vote information is in the second column of the CSV
+
+    if node in social_network:
+        social_network[node].append(vote)
+    else:
+        social_network[node] = [vote]
+
+    graph.add_node(node, vote=vote)
+
+# Retrieve the vote attributes of nodes
+node_votes = nx.get_node_attributes(graph, 'vote')
+
+# # Print the vote values of all nodes
+# for node, vote in node_votes.items():
+#     print(f"Node: {node}, Vote: {vote}")
+
+# Get non-voters
+non_voters = [node for node, data in graph.nodes(data=True) if data['vote'] == '-']
+
+#Implement PageRank algorithm
+def personalization_pageRank(graph, alpha=0.95, max_iter=100, tol=1e-6):
+    # Prepare personalization dictionary to set votes of non-voters as initial values
+    personalization = {node: data['vote'] for node, data in graph.nodes(data=True) if data['vote'] != '-'}
+
+    # Calculate PageRank
+    pr = nx.pagerank(graph, alpha=alpha, personalization=personalization, max_iter=max_iter, tol=tol)
+
+    # Update votes of non-voters based on PageRank scores
+    for non_voter in non_voters:
+        # Assign the vote value based on the PageRank score (you can also use a threshold)
+        graph.nodes[non_voter]['vote'] = 1 if pr[non_voter] >= 0.5 else -1
+
+# Call the personalization_pageRank function to update votes for non-voters
+personalization_pageRank(graph)
+
+
+# Print the updated vote values for all nodes
+for node, data in graph.nodes(data=True):
+    if 'vote' in data:
+        vote = data['vote']
+        if vote is None:
+            print(f"Node: {node}, Vote: None")
+        else:
+            print(f"Node: {node}, Vote: {vote}")
+
+# Create a DataFrame to store node and vote information
+data = {'node': [], 'vote': []}
+for node, attributes in graph.nodes(data=True):
+    data['node'].append(node)
+    data['vote'].append(attributes['vote'])
+
+
+# Convert the data to a DataFrame
+df = pd.DataFrame(data)
+
+# Save the DataFrame to a CSV file
+df.to_csv('updated_votes page rank removes 9% - between.csv', index=False)
