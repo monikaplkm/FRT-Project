@@ -1,0 +1,107 @@
+import networkx as nx
+import pandas as pd
+import csv
+
+# Read the edges from the CSV file
+edges = []
+with open("trust item 363 delimited comma.csv", "r") as file:
+    reader = csv.reader(file)
+    for row in reader:
+        try:
+            edges.append(tuple(map(int, row[0].split(','))))
+        except ValueError as v:
+            print(v)
+
+# Create a social network graph
+graph = nx.DiGraph()
+
+# Add edges
+graph.add_weighted_edges_from(edges)
+
+# Read the vote data from the CSV file
+data = pd.read_csv('votes item 363 epinions clean removes 4% - random negative.csv')
+
+# Iterate over the rows and insert vote values in the graph
+
+social_network = {}
+# Iterate over the rows and insert vote values in the social network
+for row in data.itertuples(index=False):
+    node = row[0]  # Assuming the node information is in the first column of the CSV
+    vote = row[1]  # Assuming the vote information is in the second column of the CSV
+
+    if node in social_network:
+        social_network[node].append(vote)
+    else:
+        social_network[node] = [vote]
+
+    graph.add_node(node, vote=vote)
+
+# Retrieve the vote attributes of nodes
+node_votes = nx.get_node_attributes(graph, 'vote')
+
+# # Print the vote values of all nodes
+# for node, vote in node_votes.items():
+#     print(f"Node: {node}, Vote: {vote}")
+
+# Get non-voters
+non_voters = [node for node, data in graph.nodes(data=True) if data['vote'] == '-']
+
+# print(non_voters)
+
+# Function to update the vote of a non-voter based on minimum cut
+def update_vote_for_non_voter(graph, non_voter):
+    out_neighbors = list(graph.successors(non_voter))
+
+    # Create a subgraph with the non-voter and its neighbors
+    subgraph = graph.subgraph([non_voter] + out_neighbors)
+
+    # Find connected components
+    components = list(nx.weakly_connected_components(subgraph))
+    print(components)
+    # Find the minimum cut for each connected component and update vote accordingly
+    for component in components:
+        if non_voter in component:
+            # Get the nodes that belong to the minimum cut
+            min_cut_nodes = set(component)
+
+            # Update the non-voter's vote based on majority vote of its neighbors in the minimum cut
+            votes_in_min_cut = [graph.nodes[node]['vote'] for node in min_cut_nodes if graph.nodes[node]['vote'] != '-']
+            if votes_in_min_cut:
+                graph.nodes[non_voter]['vote'] = max(votes_in_min_cut, key=votes_in_min_cut.count)
+
+# Main loop to update vote values for non-voters
+while True:
+    updated_votes = {}  # Store updated vote values for non-voters
+
+    for non_voter in non_voters:
+        update_vote_for_non_voter(graph, non_voter)
+
+    # Find non-voters that are updated in this iteration
+    new_non_voters = [node for node, data in graph.nodes(data=True) if data['vote'] == '-' and node not in updated_votes]
+
+    # Check for convergence, i.e., no more non-voters to update
+    if len(new_non_voters) == len(non_voters):
+        break
+
+    non_voters = new_non_voters
+
+# Retrieve the vote attributes of nodes after the update
+node_votes = nx.get_node_attributes(graph, 'vote')
+
+# Print the vote values of all nodes after the update
+for node, data in graph.nodes(data=True):
+    print(f"Node: {node}, Vote: {data['vote']}")
+
+        
+# Create a DataFrame to store node and vote information
+data = {'node': [], 'vote': []}
+for node, attributes in graph.nodes(data=True):
+    data['node'].append(node)
+    data['vote'].append(attributes['vote'])
+
+
+# Convert the data to a DataFrame
+df = pd.DataFrame(data)
+
+# Save the DataFrame to a CSV file
+df.to_csv('updated_votes minimum cuts removes 4% - random negative.csv', index=False)
