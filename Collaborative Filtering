@@ -1,0 +1,73 @@
+import networkx as nx
+import pandas as pd
+import csv
+
+# Read the edges from the CSV file
+edges = []
+with open("trust item 363 delimited comma - close.csv", "r") as file:
+    reader = csv.reader(file)
+    for row in reader:
+        try:
+            edges.append(tuple(map(int, row[0].split(','))))
+        except ValueError as v:
+            print(v)
+
+# Create a social network graph
+graph = nx.DiGraph()
+
+# Add edges
+graph.add_weighted_edges_from(edges)
+
+# Read the vote data from the CSV file
+data = pd.read_csv('votes item 363 epinions clean removes 9% - close.csv')
+
+# Iterate over the rows and insert vote values in the graph
+for row in data.itertuples(index=False):
+    node = row[0]  # Assuming the node information is in the first column of the CSV
+    vote = row[1]  # Assuming the vote information is in the second column of the CSV
+
+    graph.add_node(node, vote=vote)
+
+# Implement Collaborative Filtering algorithm with a threshold parameter
+def collaborative_filtering(graph, threshold):
+    for node, data in graph.nodes(data=True):
+        if 'vote' in data and data['vote'] == '-':
+            neighbors = list(graph.successors(node))
+            neighbor_votes = [graph.nodes[neighbor]['vote'] for neighbor in neighbors if 'vote' in graph.nodes[neighbor] and graph.nodes[neighbor]['vote'] != '-']
+
+            if len(neighbor_votes) >= threshold:
+                # Convert neighbor votes to integers (assuming they are integers or can be converted to integers)
+                neighbor_votes = [int(vote) for vote in neighbor_votes]
+                # Calculate the average vote among the neighbors
+                avg_vote = sum(neighbor_votes) / len(neighbor_votes)
+                # Update the non-voter's vote value with the average vote
+                graph.nodes[node]['vote'] = 1 if avg_vote > 0.5 else -1
+            else:
+                    # If the number of available neighbor votes is below the threshold,
+                    # set the non-voter's vote value to a default value, e.g., -1
+                    graph.nodes[node]['vote'] = -1
+
+# Call the collaborative_filtering function with the graph and a threshold value
+threshold_value = 1  # You can adjust this threshold based on your specific scenario
+collaborative_filtering(graph, threshold_value)
+
+# Print the updated vote values for all nodes
+for node, data in graph.nodes(data=True):
+    if 'vote' in data:
+        vote = data['vote']
+        if vote is None:
+            print(f"Node: {node}, Vote: None")
+        else:
+            print(f"Node: {node}, Vote: {vote}")
+
+# Create a DataFrame to store node and vote information
+data = {'node': [], 'vote': []}
+for node, attributes in graph.nodes(data=True):
+    data['node'].append(node)
+    data['vote'].append(attributes['vote'])
+
+# Convert the data to a DataFrame
+df = pd.DataFrame(data)
+
+# Save the DataFrame to a CSV file
+df.to_csv('updated_votes collaborative filtering removes 9% close.csv', index=False)
