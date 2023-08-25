@@ -1,0 +1,97 @@
+import networkx as nx
+import pandas as pd
+from collections import Counter
+import csv
+
+# Read the edges from the CSV file
+edges = []
+with open("trust item 363 delimited comma.csv", "r") as file:
+    reader = csv.reader(file)
+    for row in reader:
+        try:
+            edges.append(tuple(map(int, row[0].split(','))))
+        except ValueError as v:
+            print(v)
+
+# print(edges)
+
+# Create a social network graph
+graph = nx.DiGraph()
+
+# Add edges
+graph.add_weighted_edges_from(edges)
+
+# Read the vote data from the CSV file
+data = pd.read_csv('votes item 363 epinions clean removes 10% - degree negative.csv')
+
+# Iterate over the rows and insert vote values in the graph
+
+social_network = {}
+# Iterate over the rows and insert vote values in the social network
+for row in data.itertuples(index=False):
+    node = row[0]  # Assuming the node information is in the first column of the CSV
+    vote = row[1]  # Assuming the vote information is in the second column of the CSV
+
+    if node in social_network:
+        social_network[node].append(vote)
+    else:
+        social_network[node] = [vote]
+
+    graph.add_node(node, vote=vote)
+
+# Retrieve the vote attributes of nodes
+node_votes = nx.get_node_attributes(graph, 'vote')
+
+# # Print the vote values of all nodes
+# for node, vote in node_votes.items():
+#     print(f"Node: {node}, Vote: {vote}")
+
+# Get non-voters
+non_voters = [node for node, data in graph.nodes(data=True) if data['vote'] == '-']
+
+# print(non_voters)
+
+#updating non-voters based on its neighbor using majority rule
+def majority_rule(graph):
+    for node, data in graph.nodes(data=True):
+        if 'vote' in data:
+            vote = data['vote']
+            if vote == '-':
+                neighbors = list(graph.successors(node))
+                trusted_votes = []
+                for neighbor in neighbors:
+                    if 'vote' in graph.nodes[neighbor] and graph.nodes[neighbor]['vote'] is not None:
+                        neighbor_neighbors = list(graph.successors(neighbor))
+                        trusted_votes.extend([graph.nodes[n]['vote'] for n in neighbor_neighbors if 'vote' in graph.nodes[n] and graph.nodes[n]['vote'] is not None])
+
+                if trusted_votes:
+                    vote_counts = Counter(trusted_votes)
+                    majority_vote = vote_counts.most_common(1)[0][0]
+                    graph.nodes[node]['vote'] = majority_vote
+                    vote = majority_vote
+                else:
+                    graph.nodes[node]['vote'] = None
+
+    # Print the majority_rule function
+    for node, data in graph.nodes(data=True):
+        if 'vote' in data and data['vote'] is not None:
+            print(f"Node: {node}, Vote: {data['vote']}")
+
+# Call the majority_rule function to infer votes for non-voters and print the output
+majority_rule(graph)
+
+
+# Create a DataFrame to store node and vote information
+data = {'node': [], 'vote': []}
+for node, attributes in graph.nodes(data=True):
+    data['node'].append(node)
+    data['vote'].append(attributes['vote'])
+
+
+# Convert the data to a DataFrame
+df = pd.DataFrame(data)
+
+# Save the DataFrame to a CSV file
+df.to_csv('updated_votes majority rule removes 10% degree negatives.csv', index=False)
+
+
